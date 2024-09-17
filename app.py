@@ -2,121 +2,121 @@ from dotenv import load_dotenv
 import streamlit as st
 from PyPDF2 import PdfReader
 from langchain.text_splitter import CharacterTextSplitter
-from langchain.embeddings.huggingface import HuggingFaceEmbeddings
-from langchain.vectorstores import FAISS #facebook AI similarity search
-from langchain.chains.question_answering import load_qa_chain
-from langchain import HuggingFaceHub
-import docx
-import os
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.vectorstores import FAISS  # Facebook AI similarity search
+from langchain_community.llms import HuggingFaceHub
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain_core.callbacks import StdOutCallbackHandler
 from streamlit_chat import message
+import docx
+import os
+import warnings
+warnings.filterwarnings("ignore", message=r'.*Field "model_name".*')
 
 
+# Main function to load the application
 def main():
     load_dotenv()
+    configure_app()
+
+    # Initialize session state variables if not already present
+    initialize_session_state()
+
+    with st.sidebar:
+        uploaded_files = st.file_uploader("Upload your file", type=['pdf', 'docx'], accept_multiple_files=True)
+        process_button = st.button("Process")
+
+    # Process the files if the user clicks the process button
+    if process_button:
+        process_files(uploaded_files)
+
+    # Handle user questions after processing the files
+    if st.session_state.processComplete:
+        user_question = st.chat_input("Ask a question about your files.")
+        if user_question:
+            handle_user_input(user_question)
+
+# Configure Streamlit application
+def configure_app():
     st.set_page_config(page_title="Ask your PDF")
     st.header("Ask Your PDF")
 
+# Initialize session state variables
+def initialize_session_state():
     if "conversation" not in st.session_state:
         st.session_state.conversation = None
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = None
     if "processComplete" not in st.session_state:
-        st.session_state.processComplete = None
+        st.session_state.processComplete = False
 
-    with st.sidebar:
-        uploaded_files =  st.file_uploader("Upload your file",type=['pdf','docx'],accept_multiple_files=True)
-        process = st.button("Process")
+# Process uploaded files, split text into chunks, and initialize conversation chain
+def process_files(uploaded_files):
+    files_text = extract_text_from_files(uploaded_files)
+    text_chunks = split_text_into_chunks(files_text)
+    vectorstore = create_vectorstore(text_chunks)
+    st.session_state.conversation = create_conversation_chain(vectorstore)
+    st.session_state.processComplete = True
 
-    # pdf = st.file_uploader("Upload your pdf",type="pdf")
-
-    if process:
-        files_text = get_files_text(uploaded_files)
-        # get text chunks
-        text_chunks = get_text_chunks(files_text)
-        # create vetore stores
-        vetorestore = get_vectorstore(text_chunks)
-         # create conversation chain
-        st.session_state.conversation = get_conversation_chain(vetorestore) #for openAI
-        # st.session_state.conversation = get_conversation_chain(vetorestore) #for huggingface
-
-        st.session_state.processComplete = True
-
-    if  st.session_state.processComplete == True:
-        user_question = st.chat_input("Ask Question about your files.")
-        if user_question:
-            handel_userinput(user_question)
-
-def get_files_text(uploaded_files):
+# Extract text from multiple files
+def extract_text_from_files(uploaded_files):
     text = ""
     for uploaded_file in uploaded_files:
-        split_tup = os.path.splitext(uploaded_file.name)
-        file_extension = split_tup[1]
-        if file_extension == ".pdf":
-            text += get_pdf_text(uploaded_file)
-        elif file_extension == ".docx":
-            text += get_docx_text(uploaded_file)
-        else:
-            text += get_csv_text(uploaded_file)
+        ext = os.path.splitext(uploaded_file.name)[1]
+        if ext == ".pdf":
+            text += extract_text_from_pdf(uploaded_file)
+        elif ext == ".docx":
+            text += extract_text_from_docx(uploaded_file)
     return text
 
-def get_pdf_text(pdf):
+# Extract text from a PDF file
+def extract_text_from_pdf(pdf):
     pdf_reader = PdfReader(pdf)
-    text = ""
-    for page in pdf_reader.pages:
-        text += page.extract_text()
-    return text
+    return "".join(page.extract_text() for page in pdf_reader.pages)
 
-def get_docx_text(file):
+# Extract text from a DOCX file
+def extract_text_from_docx(file):
     doc = docx.Document(file)
-    allText = []
-    for docpara in doc.paragraphs:
-        allText.append(docpara.text)
-    text = ' '.join(allText)
-    return text
+    return ' '.join(paragraph.text for paragraph in doc.paragraphs)
 
-def get_csv_text(file):
-    return "a"
-
-def get_text_chunks(text):
-    # spilit ito chuncks
+# Split large text into smaller chunks for better processing
+def split_text_into_chunks(text):
     text_splitter = CharacterTextSplitter(
         separator="\n",
         chunk_size=900,
         chunk_overlap=100,
         length_function=len
     )
-    chunks = text_splitter.split_text(text)
-    return chunks
+    return text_splitter.split_text(text)
 
+# Create a FAISS vectorstore using HuggingFace embeddings
+def create_vectorstore(text_chunks):
+    # Specify a model name explicitly
+    embeddings = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+    return FAISS.from_texts(text_chunks, embeddings)
 
-def get_vectorstore(text_chunks):
-    embeddings = HuggingFaceEmbeddings()
-    knowledge_base = FAISS.from_texts(text_chunks,embeddings)
-    return knowledge_base
-
-def get_conversation_chain(vetorestore):
+# Create the conversation chain for handling user queries
+def create_conversation_chain(vectorstore):
     handler = StdOutCallbackHandler()
-    llm = HuggingFaceHub(repo_id="google/flan-t5-large", model_kwargs={"temperature":5,"max_length":64})
+    llm = HuggingFaceHub(repo_id="google/flan-t5-large", model_kwargs={"temperature": 5, "max_length": 64})
     memory = ConversationBufferMemory(memory_key='chat_history', return_messages=True)
-    conversation_chain = ConversationalRetrievalChain.from_llm(
+    return ConversationalRetrievalChain.from_llm(
         llm=llm,
-        retriever=vetorestore.as_retriever(),
+        retriever=vectorstore.as_retriever(),
         memory=memory,
         callbacks=[handler]
     )
-    return conversation_chain
 
-
-def handel_userinput(user_question):
-    response = st.session_state.conversation({'question':user_question})
+# Handle user input and respond with the conversation chain
+def handle_user_input(user_question):
+    response = st.session_state.conversation({'question': user_question})
     st.session_state.chat_history = response['chat_history']
+    display_chat_history()
 
-    # Layout of input/response containers
+# Display the chat history in the Streamlit chat interface
+def display_chat_history():
     response_container = st.container()
-
     with response_container:
         for i, messages in enumerate(st.session_state.chat_history):
             if i % 2 == 0:
@@ -124,5 +124,6 @@ def handel_userinput(user_question):
             else:
                 message(messages.content, key=str(i))
 
+# Run the main application
 if __name__ == '__main__':
     main()
