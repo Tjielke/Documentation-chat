@@ -2,7 +2,6 @@
 
 This Python project that allows you to chat with a chatbot about the PDF you uploaded. and generate a PDF transcript of the conversation. The project is built using Python and Streamlit framework.
 
-
 This is a fork from https://github.com/sudan94/chat-pdf-hugginface, however it is heavily changed to fit REST api communication with the Gemini model from google. 
 ```
 A `conda` environment is used instead of `venv` virtual environment
