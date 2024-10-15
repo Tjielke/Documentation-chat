@@ -45,18 +45,6 @@ streamlit run app.py
 
 This will start the Streamlit server and open the application in your default web browser..  
 
-### Git flow
-`.gitit.sh` can be used for easy pushing updates to remote repo.  
-
-Activate with:  
-```shell
-chmod +x .gitit.sh
-```
-Then, to add, commit, and push to remote repo:
-```
-./gitit.sh
-```
-
 ## Possible error
 
 The document that you upload is chached for 20 minutes. If you want to use the chat more than 20 minutes after uploading the content, either change this value in the code or restart the application (restarting will mean you lose the conversation history).
