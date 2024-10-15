@@ -47,8 +47,8 @@ def main():
     display_chat_history()
 
 def configure_app():
-    st.set_page_config(page_title="Ask your PDF", layout="wide")
-    st.header("Ask Your PDF")
+    st.set_page_config(page_title="Ask your documentation", layout="wide")
+    st.header("Ask Your Documentation")
 
 def initialize_session_state():
     session_defaults = {
